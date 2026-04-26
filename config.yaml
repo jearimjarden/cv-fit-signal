@@ -1,0 +1,22 @@
+training:
+  cv:
+    file_name: "CV_1.json"
+    folder_path: "data/CV"
+  jr:
+    file_name: "JR_3.json"
+    folder_path: "data/JR"
+  chunking:
+    cv:
+      method: "re"
+      chunk_size: 1
+      stride: 1
+    jr:
+      method: "nl"
+      chunk_size: 1
+      stride: 1
+  embedding:
+    device: "cuda"
+    batch_size: 4096
+  retrieval:
+    method: "faiss_ip"
+    top_k: 3
