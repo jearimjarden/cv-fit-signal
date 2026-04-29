@@ -16,3 +16,15 @@ def faiss_ip_search(
 
     distances, indices = index.search(jr_embedding, top_k)  # type: ignore
     return distances, indices
+
+
+def retrieve_top_k(cv_chunks: list, indices: list) -> list[list]:
+    retrieved_chunk = []
+
+    for indice in indices:
+        chunk = []
+        for i in indice:
+            chunk.extend([cv_chunks[i]])
+        retrieved_chunk.append(chunk)
+
+    return retrieved_chunk

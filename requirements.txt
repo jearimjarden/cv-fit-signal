@@ -11,3 +11,4 @@ nltk
 sentence-transformers
 pydantic-settings
 faiss-cpu
+openai

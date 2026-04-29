@@ -1,41 +1,87 @@
 from typing import Type, TypeVar
 import shutil
 import numpy as np
+from ..services.generator.llm_client import call_llm_oa
+from ..services.augmentator.prompt_builder import build_prompt
 from ..IO.CV_loader_creator import load_CV
 from ..IO.JR_loader_creator import load_JR
-from ..tools.schemas import Config, ChunkingMethod, EmbeddingMethod, RetrievalMethod
+from ..tools.schemas import (
+    Config,
+    ChunkingMethod,
+    EmbeddingMethod,
+    Env,
+    RetrievalMethod,
+)
 from ..services.preprocess.chunker import chunk_cv_regex, chunk_text_nltk, chunk_text_nl
 from ..services.preprocess.embedder import embed_chunk_cpu, embed_chunk_cuda
-from ..services.retrieval.vector_search import faiss_ip_search
+from ..services.retrieval.vector_search import faiss_ip_search, retrieve_top_k
+from ..services.evaluator.evaluation import (
+    create_evaluation_report,
+    print_evaluation_report,
+)
 
 
 class TrainingPipeline:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, settings: Env) -> None:
+        self.settings = settings
         self.config = config
 
     def run(self):
         jr_text = self._load_JR()
         cv_text = self._load_CV()
 
-        jr_chunk = self.chunk_text_jr(jr_text)
-        cv_chunk = self.chunk_text_cv(cv_text)
+        jr_chunks = self.chunk_text_jr(jr_text)
+        cv_chunks = self.chunk_text_cv(cv_text)
 
-        print(jr_chunk)
-        print(cv_chunk)
+        jr_embedding = self.embed_chunks(chunks=jr_chunks)
+        cv_embedding = self.embed_chunks(chunks=cv_chunks)
 
-        jr_embedding = self.embed_chunks(chunks=jr_chunk)
-        cv_embedding = self.embed_chunks(chunks=cv_chunk)
-
-        print(jr_embedding.shape)
-        print(cv_embedding.shape)
-
-        distances, indices = self.vector_search(
+        distances, indices = self.search_vector(
             jr_embedding=jr_embedding, cv_embedding=cv_embedding
         )
-        print(distances)
-        print(indices)
 
-    def vector_search(
+        retrieved_chunks = retrieve_top_k(cv_chunks=cv_chunks, indices=indices)
+
+        self.evaluate_report(
+            cv_chunks=cv_chunks,
+            jr_chunks=jr_chunks,
+            distances=distances,
+            indices=indices,
+        )
+
+        prompt = self.augment_prompt(
+            jr_chunks=jr_chunks, retrieved_chunks=retrieved_chunks
+        )
+        answers = self.generate_anwer(prompt=prompt)
+        print(answers)
+
+    def generate_anwer(self, prompt: str):
+        answers = call_llm_oa(prompt=prompt, oa_api_key=self.settings.oa_api_key)
+        return answers
+
+    def augment_prompt(self, jr_chunks: list, retrieved_chunks: list):
+        return build_prompt(jr_chunks=jr_chunks, cv_chunks=retrieved_chunks)
+
+    def evaluate_report(
+        self, cv_chunks: list, jr_chunks: list, distances: list, indices: list
+    ) -> None:
+        if self.config.training.evaluation.print_report:
+            print_evaluation_report(
+                cv_chunks=cv_chunks,
+                jr_chunks=jr_chunks,
+                distances=distances,
+                indices=indices,
+            )
+
+        if self.config.training.evaluation.save_report:
+            create_evaluation_report(
+                cv_chunks=cv_chunks,
+                jr_chunks=jr_chunks,
+                distances=distances,
+                indices=indices,
+            )
+
+    def search_vector(
         self, jr_embedding: np.ndarray, cv_embedding: np.ndarray
     ) -> tuple[list, list]:
         if self.config.training.retrieval.method == RetrievalMethod.RetrievalFaissIP:
@@ -114,5 +160,5 @@ class TrainingPipeline:
     T = TypeVar("T", bound="TrainingPipeline")
 
     @classmethod
-    def load_from_config(cls: Type[T], config: Config) -> T:
-        return cls(config)
+    def load_from_config(cls: Type[T], config: Config, setting=Env) -> T:
+        return cls(config, setting)

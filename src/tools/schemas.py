@@ -56,12 +56,20 @@ class ConfigTrainingRetrieval(BaseModel):
     top_k: int = Field(...)
 
 
+class ConfigTrainingEvaluation(BaseModel):
+    print_report: bool = Field(False)
+    save_report: bool = Field(False)
+    save_path: str = Field(...)
+    save_name: str = Field(...)
+
+
 class ConfigTraining(BaseModel):
     cv: ConfigTrainingCV = Field(...)
     jr: ConfigTrainingJR = Field(...)
     chunking: ConfigTrainingChunking = Field(...)
     embedding: ConfigTrainingEmbedding = Field(...)
     retrieval: ConfigTrainingRetrieval = Field(...)
+    evaluation: ConfigTrainingEvaluation = Field(...)
 
 
 class Config(BaseModel):
