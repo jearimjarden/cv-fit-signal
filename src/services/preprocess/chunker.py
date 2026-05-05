@@ -1,35 +1,26 @@
-import re
-from nltk.tokenize import sent_tokenize
+def semantic_chunk(text_experience: str, text_skills: str) -> list:
+    experience_chunks = []
+    experiences_splitted = text_experience.split("\n")
+    experiences_normalized = [x for x in experiences_splitted[:] if x]
 
+    context = ""
+    subtitle = ""
+    for experience in experiences_normalized:
+        if experience.strip().startswith("-"):
+            context = experience
+        elif not experience.strip().startswith("-"):
+            subtitle = experience
+        if subtitle and context:
+            experience_chunks.append(f"Experience: {subtitle} {context}")
+            context = ""
 
-# stride cannot be bigger than chunk_size
-def chunk_text_nltk(text: str, chunk_size: int, stride: int) -> list[str]:
-    sentences = sent_tokenize(text)
-    all_chunks = []
+    skills_chunks = []
+    skills_splitted = text_skills.split("\n")
+    skills_normalized = [x for x in skills_splitted if x]
 
-    for x in range(0, len(sentences) - chunk_size + 1, stride):
-        chunk = ". ".join(sentences[x : x + chunk_size])
-        all_chunks.append(chunk)
+    for skill in skills_normalized:
+        skill = skill.replace("-", "")
+        skill.strip()
+        skills_chunks.append(f"Skills:{skill}")
 
-    return all_chunks
-
-
-def chunk_text_nl(text: str, chunk_size: int, stride: int) -> list[str]:
-    sentences = text.split("\n")
-
-    all_chunks = []
-
-    for x in range(0, len(sentences) - chunk_size + 1, stride):
-        chunk = ". ".join(sentences[x : x + chunk_size])
-        all_chunks.append(chunk)
-
-    return all_chunks
-
-
-def chunk_cv_regex(text: str):
-    # this is a hardcoded chunker for semi structured CV
-    all_chunks = []
-    result = re.findall(r"(\w+):\s*\n([\S\s]+?)(?:\n\n|$)", text)
-    for field, value in result:
-        all_chunks.append(f"{field}: {value}")
-    return all_chunks
+    return experience_chunks + skills_chunks

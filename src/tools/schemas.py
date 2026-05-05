@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import SettingsConfigDict, BaseSettings
 from enum import Enum
+import numpy as np
 
 
 class Env(BaseSettings):
@@ -14,6 +15,8 @@ class ChunkingMethod(str, Enum):
     CHUNKING_NLTK = "nltk"
     CHUNKING_NL = "nl"
     CHUNKING_RE = "re"
+    CHUNKING_RE_NL = "re_nl"
+    CHUNKING_STRUCTURED = "structured"
 
 
 class RetrievalMethod(str, Enum):
@@ -53,7 +56,10 @@ class ConfigTrainingEmbedding(BaseModel):
 
 class ConfigTrainingRetrieval(BaseModel):
     method: RetrievalMethod = Field(...)
-    top_k: int = Field(...)
+    query_top_k: int = Field(...)
+    component_top_k: int = Field(...)
+    query_rerank: int = Field(...)
+    component_rerank: int = Field(...)
 
 
 class ConfigTrainingEvaluation(BaseModel):
@@ -74,3 +80,85 @@ class ConfigTraining(BaseModel):
 
 class Config(BaseModel):
     training: ConfigTraining = Field(...)
+
+
+class JRDecomposed(BaseModel):
+    idx: int = Field(...)
+    job_requirement: str = Field(...)
+    components: list[str] = Field(...)
+    reason: str = Field(...)
+
+
+class JREmbed(BaseModel):
+    idx: int = Field(...)
+    job_requirement: str = Field(...)
+    components: list[str] = Field(...)
+    job_requirement_embedding: np.ndarray = Field(...)
+    components_embedding: np.ndarray = Field(...)
+
+    class Config:
+        arbitrary_types_allowed = True
+
+
+class BaseSearchQuery(BaseModel):
+    query: str = Field(...)
+    distances: list = Field(...)
+    indices: list = Field(...)
+
+
+class BaseSearchComponents(BaseModel):
+    component: str = Field(...)
+    distances: list = Field(...)
+    indices: list = Field(...)
+
+
+class BaseSearch(BaseModel):
+    idx: int = Field(...)
+    query_search: BaseSearchQuery = Field(...)
+    components_search: list[BaseSearchComponents] = Field(...)
+
+
+class BaseRetrievalQuery(BaseModel):
+    query: str = Field(...)
+    distances: list = Field(...)
+    chunks: list = Field(...)
+
+
+class BaseRetrievalComponent(BaseModel):
+    component: str = Field(...)
+    distances: list = Field(...)
+    chunks: list = Field(...)
+
+
+class BaseRetrieval(BaseModel):
+    idx: int = Field(...)
+    query_retrieval: BaseRetrievalQuery = Field(...)
+    components_retrieval: list[BaseRetrievalComponent] = Field(...)
+
+
+class EvidenceComponent(BaseModel):
+    component: str = Field(...)
+    evidence: list = Field(...)
+
+
+class EvidenceQuery(BaseModel):
+    query: str = Field(...)
+    evidence: list = Field(...)
+
+
+class Evidence(BaseModel):
+    idx: int = Field(...)
+    query: EvidenceQuery = Field(...)
+    component: list[EvidenceComponent] = Field(...)
+
+
+class EvaluationResult(BaseModel):
+    components: str = Field(...)
+    evidence_score: float = Field(...)
+    responsible_multiplier: float = Field(...)
+    capability_level: str = Field(...)
+    reason: str = Field(...)
+
+
+class Evaluation(BaseModel):
+    result: list[EvaluationResult] = Field(...)

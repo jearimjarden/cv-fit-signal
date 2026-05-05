@@ -3,11 +3,11 @@ training:
     file_name: "CV_1.json"
     folder_path: "data/CV"
   jr:
-    file_name: "JR_3.json"
+    file_name: "JR_4.json"
     folder_path: "data/JR"
   chunking:
     cv:
-      method: "re"
+      method: "structured"
       chunk_size: 1
       stride: 1
     jr:
@@ -19,9 +19,12 @@ training:
     batch_size: 4096
   retrieval:
     method: "faiss_ip"
-    top_k: 3
+    query_top_k: 3
+    component_top_k: 2
+    query_rerank: 3
+    component_rerank: 2
   evaluation:
-    print_report: False
-    save_report: True
-    save_path: "test"
-    save_name: "test"
+    print_report: True
+    save_report: False
+    save_path: "/mnt/c/Users/Jearim Jarden/Desktop/eval"
+    save_name: "test2.csv"
