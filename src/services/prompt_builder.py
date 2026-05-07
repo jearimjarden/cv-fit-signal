@@ -1,8 +1,72 @@
-from ...tools.schemas import EvidenceComponent, EvidenceQuery
+from ..tools.schemas import EvidenceComponent, EvidenceQuery, Score
 
 
-def _build_evidence(query: EvidenceQuery, components: list[EvidenceComponent]):
-    structured_evidence = """"""
+def create_cv_parser_prompt(cv_text: str) -> str:
+    return f"""
+Role:
+You are a assistant for Job Recruiter
+Your goal is to classificate messy Curriculum Vitae into structured one
+
+Definition:
+- "name" = role title / project title / activity title
+- "item" = concrete responsibilities, actions, achievements, or evidence related to the title
+Task:
+1. Understand the structured CV mapping:
+  Structured CV mapping:
+    - Person Name → candidate's real personal name ONLY
+    - Education → candidate's education
+    - Technical Skills → candidate's technical skills (techical skills and item)
+    - Work Experience → candidates's work experience (job name and item)
+    - Project → candidate's projects outside work (project name and item)
+    - Soft Skills → candidate's soft skill
+    - Languages → candidate's language profieciency (language and capability)
+2. Remap messy CV ONLY to REQUIRED structured
+
+Rule:
+1. ONLY Map required Structured CV Mapping
+2. Remap using exact words from Messy CV
+3. If only the title/name exists but no supporting responsibilities, achievements, or detailed information are provided, it is acceptable to keep the "item" field as an empty array [].
+4. DO NOT include timeline and company's name for item
+5. DO NOT force information into unrelated categories.
+6. Organization and Seminar IS NOT project
+7. If there is not enough information to confidently map a section, return an empty array []
+
+Messy CV:
+{cv_text}
+
+Constrain:
+- Output valid JSON only
+- Do not include markdown
+
+Output Format (Strict JSON):
+{{result: {{
+    "person_name" : "string",
+    "education: ["string", ...],
+    "technical_skills: [{{
+      "name": "string",
+      "item": ["string", ...]
+    }}]
+    "work_experience: [{{
+      "name": "string",
+      "item": ["string, ...]
+    }}]
+    "project:
+      [{{
+      "name": "string",
+      "item": ["string", ...]
+      }}]
+    "soft_skills": ["string", ...]
+    "languages": [{{
+    "name": "string",
+    "level": "string"
+    }}]
+}}
+}}
+"""
+
+
+def _build_evidence(query: EvidenceQuery, components: list[EvidenceComponent]) -> str:
+    structured_evidence = ""
     for idx_component, component in enumerate(components):
         all_evidence = ""
         for idx_evidence, evidence in enumerate(component.evidence):
@@ -27,7 +91,9 @@ Component {idx_component+1}'s evidence:
     return full_structure
 
 
-def create_score_prompt(query: EvidenceQuery, components: list[EvidenceComponent]):
+def create_score_prompt(
+    query: EvidenceQuery, components: list[EvidenceComponent]
+) -> str:
     structured_evidence = _build_evidence(components=components, query=query)
     return f"""
 Role:
@@ -146,7 +212,7 @@ Output Format (JSON strict):
 
 def create_correction_prompt(
     jr_text: str, invalid_components: list, jr_components: list
-):
+) -> str:
     to_fix_components = ""
     for idx, component in enumerate(invalid_components):
         to_fix_components += f"[{idx+1}]. {component}\n"
@@ -177,4 +243,47 @@ Invalid Components:
 
 Output Format (JSON Strict):
 {{'components':[string, string]}}
+"""
+
+
+def _build_report_context(scoring: list[Score]) -> str:
+
+    all_sentences = ""
+    for idx_score, score in enumerate(scoring):
+        reasoning = ""
+
+        for idx_reason, reason in enumerate(score.reason):
+            sentence = f"[{idx_reason+1}]. {reason}\n"
+            reasoning += sentence
+
+        all_sentences += f"""Reason {idx_score+1}:
+{reasoning}\n"""
+
+    return all_sentences
+
+
+def create_report_prompt(scoring: list[Score]) -> str:
+    context = _build_report_context(scoring=scoring)
+    print(context)
+    return f"""
+Role:
+- You are helper to conclude reason
+- Each sentence are evaluation for Job Requirement fit using Candidate CV Evidence
+
+Task:
+For each Reason:
+- Create a short conclusion explaining the evaluation directly TO the candidate
+- Conclution size must be from 2 to 3 sentences
+- Do NOT use items from other Reason
+- Use second-person perspective ("you", "your")
+- Explain strengths or gaps clearly
+
+{context}
+
+Constraint:
+- Output valid JSON only
+- Do not include markdown
+
+Output Format (JSON Strict):
+{{"result": ["string", "string"]}}
 """

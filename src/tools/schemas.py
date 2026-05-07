@@ -1,7 +1,46 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic_settings import SettingsConfigDict, BaseSettings
 from enum import Enum
 import numpy as np
+from torch import Optional
+from dataclasses import dataclass
+
+
+class EmbeddingDevice(str, Enum):
+    CUDA = "cuda"
+    CPU = "cpu"
+
+
+class EmbeddingModel(str, Enum):
+    MINI_LLM = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+class CapabilityLevel(str, Enum):
+    EXPLICIT_STRONG = "explicit_strong"
+    EXPLICIT_WEAK = "explicit_weak"
+    IMPLICIT_STRONG = "implicit_strong"
+    IMPLICIT_WEAK = "implicit_weak"
+    MISSING = "missing"
+
+
+@dataclass
+class Capability:
+    capability_level: CapabilityLevel
+
+    def __post_init__(self):
+        if isinstance(self.capability_level, str):
+            self.capability_level = CapabilityLevel(self.capability_level)
+
+    def weight(self) -> float:
+        mapping = {
+            CapabilityLevel.EXPLICIT_STRONG: 1.0,
+            CapabilityLevel.EXPLICIT_WEAK: 0.8,
+            CapabilityLevel.IMPLICIT_STRONG: 0.6,
+            CapabilityLevel.IMPLICIT_WEAK: 0.4,
+            CapabilityLevel.MISSING: 0.0,
+        }
+
+        return mapping[self.capability_level]
 
 
 class Env(BaseSettings):
@@ -23,73 +62,59 @@ class RetrievalMethod(str, Enum):
     RetrievalFaissIP = "faiss_ip"
 
 
-class EmbeddingMethod(str, Enum):
-    EMBEDDING_CUDA = "cuda"
-    EMBEDDING_CPU = "cpu"
+class CVInput(BaseModel):
+    text: str = Field(...)
 
 
-class ConfigTrainingCV(BaseModel):
+class ConfigFileServiceItem(BaseModel):
     file_name: str = Field(...)
     folder_path: str = Field(...)
 
 
-class ConfigTrainingJR(BaseModel):
-    file_name: str = Field(...)
-    folder_path: str = Field(...)
-
-
-class ConfigTrainingChunkingOption(BaseModel):
-    method: ChunkingMethod = Field(...)
-    chunk_size: int = Field(..., ge=1)
-    stride: int = Field(..., ge=1)
-
-
-class ConfigTrainingChunking(BaseModel):
-    cv: ConfigTrainingChunkingOption = Field(...)
-    jr: ConfigTrainingChunkingOption = Field(...)
-
-
-class ConfigTrainingEmbedding(BaseModel):
-    device: EmbeddingMethod = Field(...)
+class ConfigEmbedding(BaseModel):
+    device: EmbeddingDevice = Field(...)
     batch_size: int = Field(4096, ge=4, le=16384)
+    model: str = Field(...)
 
 
-class ConfigTrainingRetrieval(BaseModel):
-    method: RetrievalMethod = Field(...)
+class ConfigFileService(BaseModel):
+    cv: ConfigFileServiceItem = Field(...)
+    jr: ConfigFileServiceItem = Field(...)
+
+
+class ConfigRetrieval(BaseModel):
     query_top_k: int = Field(...)
     component_top_k: int = Field(...)
-    query_rerank: int = Field(...)
-    component_rerank: int = Field(...)
 
 
-class ConfigTrainingEvaluation(BaseModel):
-    print_report: bool = Field(False)
-    save_report: bool = Field(False)
-    save_path: str = Field(...)
-    save_name: str = Field(...)
+class ConfigEvaluation(BaseModel):
+    evidence_score_mul: float = Field(1.0)
+    capability_score_mul: float = Field(1.0)
+    responsibility_multiplier_mul: float = Field(1.0)
 
 
-class ConfigTraining(BaseModel):
-    cv: ConfigTrainingCV = Field(...)
-    jr: ConfigTrainingJR = Field(...)
-    chunking: ConfigTrainingChunking = Field(...)
-    embedding: ConfigTrainingEmbedding = Field(...)
-    retrieval: ConfigTrainingRetrieval = Field(...)
-    evaluation: ConfigTrainingEvaluation = Field(...)
+class ConfigJRChunk(BaseModel):
+    chunk_size: int = Field(...)
+    stride: int = Field(...)
 
 
 class Config(BaseModel):
-    training: ConfigTraining = Field(...)
+    api_service: bool = Field(...)
+    file_service: ConfigFileService = Field(...)
+    jr_chunk: ConfigJRChunk = Field(...)
+    embedding: ConfigEmbedding = Field(...)
+    retrieval: ConfigRetrieval = Field(...)
+    evaluation: ConfigEvaluation = Field(...)
 
 
-class JRDecomposed(BaseModel):
+class JRChunks(BaseModel):
     idx: int = Field(...)
     job_requirement: str = Field(...)
     components: list[str] = Field(...)
     reason: str = Field(...)
 
 
-class JREmbed(BaseModel):
+class JREmbedding(BaseModel):
     idx: int = Field(...)
     job_requirement: str = Field(...)
     components: list[str] = Field(...)
@@ -161,4 +186,61 @@ class EvaluationResult(BaseModel):
 
 
 class Evaluation(BaseModel):
+    query: str = Field(...)
     result: list[EvaluationResult] = Field(...)
+
+
+class StructuredCVItem(BaseModel):
+    name: str = Field(...)
+    item: list = Field(...)
+    model_config = ConfigDict(extra="forbid")
+
+
+class StructuredCVLanguage(BaseModel):
+    name: str = Field(...)
+    level: str = Field(...)
+
+
+class StructuredCV(BaseModel):
+    person_name: str = Field(...)
+    education: list = Field(...)
+    technical_skills: list[StructuredCVItem] = Field(...)
+    work_experience: list[StructuredCVItem] = Field(...)
+    project: list[StructuredCVItem] = Field(...)
+    soft_skills: list = Field(...)
+    languages: list[StructuredCVLanguage] = Field(...)
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CVChunk(BaseModel):
+    idx: int = Field(...)
+    type: str = Field(...)
+    chunk: str = Field(...)
+
+
+class CVEmbedding(BaseModel):
+    idx: int = Field(...)
+    type: str = Field(...)
+    chunk: str = Field(...)
+    embedding: np.ndarray = Field(...)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+
+class Score(BaseModel):
+    query: str = Field(...)
+    final_score: float = Field(...)
+    reason: list[str] = Field(...)
+
+
+class ReportScore(BaseModel):
+    query: str = Field(...)
+    score: float = Field(...)
+    reason: str = Field(...)
+
+
+class Report(BaseModel):
+    datetime: str = Field(...)
+    name: Optional[str] = Field(default=None)
+    report: list[ReportScore] = Field(...)
+    final_score: float = Field(...)

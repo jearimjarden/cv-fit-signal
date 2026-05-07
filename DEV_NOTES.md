@@ -2,7 +2,7 @@
 - Contain each developer decision and reason for each commit
 - Provide notes for developer 
 
-## 3. CV-fit RAG System v1.0
+## CV-fit RAG System v1.0 (6 May 2026)
 ### a. Job Requirement Parser and Chunking
 Decision:
 - Job Requirements input should be structured
@@ -62,7 +62,7 @@ Decision:
 
         Components:
             - "Experience applying machine learning techniques"
-            - "Applying machine learning to real problems"
+            - "Solve real problem using machine learning"
 
 Reason:
 - Job requirements define the target evidence, so decomposing them into specific, granular components enables more precise matching and evaluation,
@@ -206,3 +206,69 @@ Prompt:
     - 1.1 → ownership (explicit OR clearly implied independent work) 
     - 1.0 → contributed (worked on or developed without ownership signals) 
     - 0.9 → assisted (helped, supported, or assisted)"
+
+## CV-fit RAG System v1.1 (7 May 2026)
+### a. LLM-based structured CV parser and CV Semantic Chunk
+Decision:
+- Replaced combined regex and split parser with LLM-based 
+- Convert messy CV input into structured CV
+- Created new parser category that will be use by CV semantic chunk (Technical Skills, Work Experience, Project, Language, Soft Skills)
+
+Reason:
+- Previous Parser struggled in messy CV, this isnt align with real world CV that messy and unstructured
+- Previous CV Semantic Chunk has a limited sections that limit number of information category that can be used as evidence for job requirement
+- This version of the parser enables the system to handle CV inputs that are closer to real-world formats.
+
+Limitation:
+- Unknown category tend to be inputted as Project by LLM 
+
+  Fix:
+  - Forcing LLM not to add (e.g. Organizational) to project category
+  - Added fallback classification handling to prevent the LLM from incorrectly assigning unknown categories to semantically similar existing categories
+
+  Note:
+  - I havent observe with larger testing if this fix is reliable or not
+
+Note:
+- Category: ("Language", "Project", "Work Experience", "Technical Skills") has inside structured introducing "name", "item"
+- If not enough evidence for "item" then llm return [], this [] output change the CV semantic chunk format.
+
+Example:
+"[CVChunk(idx=0, type='Technical Skill', chunk='Technical Skills (Programming Languages): Python, C++, SQL (basic)'),CVChunk(idx=10, type='Work Experience', chunk='Work Experience (Backend Developer Intern): Improved response structure consistency across several endpoints'), CVChunk(idx=22, type='Language', chunk='Language: English (Professional Working Proficiency)')]"
+
+### b. Final Scoring Logic
+Decision:
+- Use multiplication scoring for "Evidence Score", "Responsibility Multiplier", "Capability Score" as Final Score for each Job Requirements
+- Introduced configuration to edit each scoring multiplier
+
+Reason:
+- LLM-generated scoring requires constrained and structured evaluation dimensions to reduce inconsistent or ungrounded scoring behavior
+- Separating scoring into multiple dimensions (capability, evidence strength, responsibility) prevents the evaluation from collapsing into a single ambiguous score.
+- Multiplicative scoring helps reduce overestimation / underestimation from a single incorrect dimension by requiring all dimensions to contribute consistently to the final score.
+
+Limitation:
+- Multiplicative scoring tends to produce conservative final scores, especially when one dimension is weak.
+- Scoring multipliers require calibration using real evaluation cases and failure analysis
+- Final scoring quality is dependent on retrieval quality and evidence relevance.
+
+### c. Report Generator
+Decision:
+- Conclude each Job Reqiurement's components score reasoning into 1 job requirement reasoning using LLM-based.
+- Change systematic explanation into more user friendly explanation while adding some suggestion.
+
+Reason:
+- Job requirement evaluation's reason are separated into components level of Job Requirement, user should not analyze the report per component but per job requirement
+- User appriciate more friendly / mentor-ish explanation than systematic explanation
+- CV improvement suggestion is added, adding value for user to add missing context in their CV or understand their weakness
+
+Note:
+- I havent try to include final score of each job's requirement as context for LLM to conclude reasoning, I assume this could improve the reasoning if the score is perfectly align and hurt the reason if the score is not correct.
+
+Example:
+"Query: Experience applying machine learning techniques to real problems
+Score: 0.525
+Reason: Your experience in building a machine learning classification pipeline using scikit-learn shows that you have a solid understanding of machine learning techniques. However, it would strengthen your profile if you could provide examples of how your work addressed specific real-world problems.
+
+Query: Familiarity with containerization tools (e.g., Docker)
+Score: 0.0
+Reason: Unfortunately, there is no evidence in your CV that demonstrates your familiarity with containerization tools like Docker. Gaining experience in this area could enhance your skill set and make you a more competitive candidate for roles that require containerization knowledge.

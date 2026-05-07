@@ -1,30 +1,22 @@
-training:
+api_service: False
+file_service:
   cv:
-    file_name: "CV_1.json"
+    file_name: "CV_2.json"
     folder_path: "data/CV"
   jr:
     file_name: "JR_4.json"
     folder_path: "data/JR"
-  chunking:
-    cv:
-      method: "structured"
-      chunk_size: 1
-      stride: 1
-    jr:
-      method: "nl"
-      chunk_size: 1
-      stride: 1
-  embedding:
-    device: "cuda"
-    batch_size: 4096
-  retrieval:
-    method: "faiss_ip"
-    query_top_k: 3
-    component_top_k: 2
-    query_rerank: 3
-    component_rerank: 2
-  evaluation:
-    print_report: True
-    save_report: False
-    save_path: "/mnt/c/Users/Jearim Jarden/Desktop/eval"
-    save_name: "test2.csv"
+jr_chunk:
+  chunk_size: 1
+  stride: 1
+embedding:
+  batch_size: 4096
+  device: "cuda"
+  model: "sentence-transformers/all-MiniLM-L6-v2"
+retrieval:
+  query_top_k: 3
+  component_top_k: 2
+evaluation:
+  evidence_score_mul : 1.0
+  capability_score_mul : 1.0
+  responsibility_multiplier_mul: 1.0

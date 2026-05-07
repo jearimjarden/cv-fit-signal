@@ -13,7 +13,7 @@ def save_CV(file_name: str, folder_path: str, input_text: str):
         json.dump(input_text, file, indent=2)
 
 
-def load_CV(file_name: str, folder_path) -> str:
+def load_CV(file_name: str, folder_path) -> dict:
     path = Path(folder_path) / file_name
 
     if not path.exists():
