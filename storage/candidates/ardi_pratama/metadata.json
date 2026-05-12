@@ -1,0 +1,24 @@
+{
+    "cv_name": "Ardi Pratama",
+    "created_date": "12-05-2026_22:41",
+    "cv_parsed_n": 20,
+    "cv_chunked_n": 27,
+    "cv_embedding_n": 27,
+    "token_summary": {
+        "total_prompt_tokens": 891,
+        "total_completion_tokens": 505,
+        "total_cost_idr": 7.51038,
+        "tokens_history": {
+            "pre_parse": {
+                "prompt_token": 891,
+                "completion_tokens": 505
+            }
+        }
+    },
+    "latencies_ms": {
+        "latencies_ms": {
+            "pre_parse": 9351.55,
+            "pre_embed_cv": 610.09
+        }
+    }
+}

@@ -1,8 +1,17 @@
-from ..tools.schemas import CVChunk, StructuredCVItem, StructuredCVLanguage
-from ..tools.schemas import JRChunks
+import json
+import logging
 from .prompt_builder import create_component_prompt, create_correction_prompt
 from .llm_client import LLMClient
-import json
+from ..tools.schemas import (
+    CVChunk,
+    InferenceStage,
+    PreprocessStage,
+    StructuredCVItem,
+    StructuredCVLanguage,
+    JRChunks,
+)
+
+logger = logging.getLogger(__name__)
 
 
 def decompose_and_validate_jr(
@@ -12,13 +21,25 @@ def decompose_and_validate_jr(
 
     for idx, jr_text in enumerate(jr_parsed_text):
         prompt = create_component_prompt(jr_text=jr_text)
-        response = llm_client.generate(prompt=prompt)
-        dict_response = json.loads(response)
+        response = llm_client.generate(prompt=prompt, stage=InferenceStage.CHUNK)
+
+        try:
+            dict_response = json.loads(response)
+
+        except json.JSONDecodeError:
+            logger.warning(
+                "Invalid JSON output detected, attempting JSON repair",
+                extra={"stage": InferenceStage.CHUNK},
+            )
+            dict_response = llm_client.json_repair(context=response)
+
         dict_response["idx"] = idx
         all_chunks.append(JRChunks(**dict_response))
 
     validated_chunks = _validate_jr_chunks(jr_chunks=all_chunks, llm_client=llm_client)
-
+    logger.debug(
+        "Chunked JR", extra={"stage": InferenceStage.CHUNK, "result": all_chunks}
+    )
     return validated_chunks
 
 
@@ -37,13 +58,32 @@ def _validate_jr_chunks(
                 invalid_components.append(c)
 
         if invalid_components:
+            logger.warning(
+                "Repairing invalid JR requirement",
+                extra={
+                    "stage": InferenceStage.CHUNKREPAIR,
+                    "invalid_components": invalid_components,
+                },
+            )
             prompt = create_correction_prompt(
                 jr_text=jr_decom.job_requirement,
                 invalid_components=invalid_components,
                 jr_components=jr_decom.components,
             )
-            response = llm_client.generate(prompt=prompt)
-            dict_answer = json.loads(response)
+            response = llm_client.generate(
+                prompt=prompt, stage=InferenceStage.CHUNKREPAIR
+            )
+
+            try:
+                dict_answer = json.loads(response)
+
+            except json.JSONDecodeError:
+                logger.warning(
+                    "Invalid JSON output detected, attempting JSON repair",
+                    extra={"stage": InferenceStage.CHUNK},
+                )
+                dict_answer = llm_client.json_repair(context=response)
+
             validated_jr_components.append(
                 JRChunks(
                     idx=jr_decom.idx,
@@ -114,6 +154,9 @@ def chunk_cv_semantic(
         all_chunk.append(CVChunk(idx=chunk_idx, type="Soft Skills", chunk=chunk))
         chunk_idx += 1
 
+    logger.debug(
+        "Chunked CV", extra={"stage": PreprocessStage.CHUNK, "result": all_chunk}
+    )
     return all_chunk
 
 
@@ -125,7 +168,6 @@ def _legacy_chunk_cv(text_experience: str, text_skills: str) -> list:
     Notes: Unused for active pipeline"""
 
     experience_chunks = []
-    print(text_experience)
     experiences_splitted = text_experience.split("\n")
     experiences_normalized = [x for x in experiences_splitted[:] if x]
 

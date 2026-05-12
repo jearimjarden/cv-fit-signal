@@ -1,18 +1,38 @@
 import json
 import re
+import logging
 from nltk.tokenize import sent_tokenize
-
 from .llm_client import LLMClient
 from .prompt_builder import create_cv_parser_prompt
-from ..tools.schemas import StructuredCV
+from ..tools.schemas import InferenceStage, PreprocessStage, StructuredCV
+from ..tools.exceptions_schemas import InvalidJRError
+
+logger = logging.getLogger(__name__)
 
 
 def parse_cv_llm(cv_text: str, llm_client: LLMClient) -> StructuredCV:
-    prompt = create_cv_parser_prompt(cv_text=cv_text)
-    response = llm_client.generate(prompt)
-    dict_response = json.loads(response)
+    try:
+        prompt = create_cv_parser_prompt(cv_text=cv_text)
+        response = llm_client.generate(prompt, stage=PreprocessStage.PARSE)
+        dict_response = json.loads(response)
+        structured_cv = StructuredCV(**dict_response)
 
-    return StructuredCV(**dict_response["result"])
+        logger.debug(
+            "Parsed CV",
+            extra={"stage": PreprocessStage.PARSE, "result": structured_cv},
+        )
+        return structured_cv
+
+    except json.JSONDecodeError:
+        logger.warning(
+            "Invalid JSON output detected, attempting JSON repair",
+            extra={"stage": PreprocessStage.PARSE},
+        )
+
+        repaired_response = llm_client.json_repair(context=response)
+        structured_cv = StructuredCV(**repaired_response)
+
+        return structured_cv
 
 
 def parse_normalize_jr(text: str, chunk_size: int, stride: int) -> list[str]:
@@ -32,6 +52,13 @@ def parse_normalize_jr(text: str, chunk_size: int, stride: int) -> list[str]:
 
     normalized_chunk = _normalize_jr_text(parsed_text=all_chunks)
 
+    if len(normalized_chunk) > 20:
+        raise InvalidJRError("Parsed JR could not exceed 20 parses")
+
+    logger.debug(
+        "Parsed JR", extra={"stage": InferenceStage.PARSE, "result": normalized_chunk}
+    )
+
     return normalized_chunk
 
 
@@ -39,7 +66,7 @@ def _normalize_jr_text(parsed_text: list[str]) -> list[str]:
     normalized_text = []
 
     for text in parsed_text:
-        parts = re.split(r"(?:^|\n)(?:\d+[.)]|[-•])\s+", text)
+        parts = re.split(r"(?:^|\n)(?:\d+[.)]|[-•·])\s+", text)
         parts = [p.strip() for p in parts if p.strip()]
         normalized_text.extend(parts)
 

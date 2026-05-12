@@ -2,14 +2,14 @@ from ..tools.schemas import EvidenceComponent, EvidenceQuery, Score
 
 
 def create_cv_parser_prompt(cv_text: str) -> str:
-    return f"""
-Role:
+    return f"""Role:
 You are a assistant for Job Recruiter
 Your goal is to classificate messy Curriculum Vitae into structured one
 
 Definition:
 - "name" = role title / project title / activity title
 - "item" = concrete responsibilities, actions, achievements, or evidence related to the title
+
 Task:
 1. Understand the structured CV mapping:
   Structured CV mapping:
@@ -35,16 +35,16 @@ Messy CV:
 {cv_text}
 
 Constrain:
-- Output valid JSON only
+- Return strict valid JSON only
 - Do not include markdown
 
-Output Format (Strict JSON):
-{{result: {{
+Output Format ():
+{{
     "person_name" : "string",
     "education: ["string", ...],
     "technical_skills: [{{
       "name": "string",
-      "item": ["string", ...]
+      "item",: ["string", ...]
     }}]
     "work_experience: [{{
       "name": "string",
@@ -61,7 +61,6 @@ Output Format (Strict JSON):
     "level": "string"
     }}]
 }}
-}}
 """
 
 
@@ -69,8 +68,10 @@ def _build_evidence(query: EvidenceQuery, components: list[EvidenceComponent]) -
     structured_evidence = ""
     for idx_component, component in enumerate(components):
         all_evidence = ""
+
         for idx_evidence, evidence in enumerate(component.evidence):
             all_evidence += f"[{idx_evidence+1}]. {evidence}\n"
+
         structured_evidence += f"""Requirement Components {idx_component+1}:
 - {component.component}
 
@@ -78,16 +79,22 @@ Component {idx_component+1}'s evidence:
 {all_evidence}
 
 """
+
     structured_query = f"""Job Requirement:
 -{query.query}
 """
+
     all_global = ""
+
     for idx_global, evidence in enumerate(query.evidence):
         all_global += f"[{idx_global+1}]. {evidence}\n"
+
     global_evidence = f"""Global Evidence:
 {all_global}
 """
+
     full_structure = structured_query + structured_evidence + global_evidence
+
     return full_structure
 
 
@@ -95,9 +102,9 @@ def create_score_prompt(
     query: EvidenceQuery, components: list[EvidenceComponent]
 ) -> str:
     structured_evidence = _build_evidence(components=components, query=query)
-    return f"""
-Role:
-You are a strict evaluator that assesses whether a candidate’s evidence supports a job requirement.
+
+    return f"""Role:
+You are a strict evaluator that assesses whether a candidate's evidence supports a job requirement.
 Your goal is to verify evidence, NOT assume capability.
 
 Task:
@@ -145,26 +152,24 @@ For each Requirement Components:
 {structured_evidence}
 
 Constraint:
-- Output valid JSON only
+- Return strict valid JSON only.
 - Do not include markdown
-
 
 Output Format (JSON Strict):
 {{"result": [
   {{
     "components": "string",
     "evidence_score": 0.0, 
-    "responsible_multiplier: 0.1,
+    "responsible_multiplier": 0.1,
     "capability_level": "explicit_strong | explicit_weak | implicit_strong | implicit_weak | missing",
-    "reason": "string",
+    "reason": "string"
   }}
 ]}}
 """
 
 
 def create_component_prompt(jr_text: str) -> str:
-    return f"""
-Role:
+    return f"""Role:
 You are a helper to decompose Job Requirement
 
 Definition:
@@ -216,8 +221,7 @@ def create_correction_prompt(
     to_fix_components = ""
     for idx, component in enumerate(invalid_components):
         to_fix_components += f"[{idx+1}]. {component}\n"
-    return f"""
-Task:
+    return f"""Task:
 1. Fix ONLY Invalid Components in Full Components
 2. Normalize Invalid Components to make contextualize components
 3. USE Context from Job_Requirements
@@ -247,8 +251,8 @@ Output Format (JSON Strict):
 
 
 def _build_report_context(scoring: list[Score]) -> str:
-
     all_sentences = ""
+
     for idx_score, score in enumerate(scoring):
         reasoning = ""
 
@@ -256,7 +260,7 @@ def _build_report_context(scoring: list[Score]) -> str:
             sentence = f"[{idx_reason+1}]. {reason}\n"
             reasoning += sentence
 
-        all_sentences += f"""Reason {idx_score+1}:
+        all_sentences += f"""Evaluation {idx_score+1}:
 {reasoning}\n"""
 
     return all_sentences
@@ -264,26 +268,41 @@ def _build_report_context(scoring: list[Score]) -> str:
 
 def create_report_prompt(scoring: list[Score]) -> str:
     context = _build_report_context(scoring=scoring)
-    print(context)
-    return f"""
-Role:
-- You are helper to conclude reason
+
+    return f"""Role:
+- You are helper to conclude evaluation
 - Each sentence are evaluation for Job Requirement fit using Candidate CV Evidence
 
 Task:
-For each Reason:
+For each Evaluation:
 - Create a short conclusion explaining the evaluation directly TO the candidate
 - Conclution size must be from 2 to 3 sentences
 - Do NOT use items from other Reason
 - Use second-person perspective ("you", "your")
 - Explain strengths or gaps clearly
 
+List of Evaluation:
 {context}
 
 Constraint:
+- Number of result must be same as number of Evaluation
 - Output valid JSON only
 - Do not include markdown
 
 Output Format (JSON Strict):
-{{"result": ["string", "string"]}}
+{{"result": ["string", ...]}}
+"""
+
+
+def create_fix_json_prompt(context: str) -> str:
+    return f"""Role: You are a senior coder
+
+Task:
+- Fix the Invalid JSON
+- Strict RFC8259-valid JSON only
+- Do not include markdown
+- Return the fixed JSON
+
+Invalid JSON:
+{context}
 """

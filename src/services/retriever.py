@@ -1,5 +1,6 @@
 import faiss
 import numpy as np
+import logging
 from ..tools.schemas import (
     BaseRetrieval,
     BaseRetrievalComponent,
@@ -8,8 +9,11 @@ from ..tools.schemas import (
     BaseSearchComponents,
     BaseSearchQuery,
     CVEmbedding,
+    InferenceStage,
     JREmbedding,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def faiss_ip_search(
@@ -19,6 +23,7 @@ def faiss_ip_search(
     component_top_k: int,
 ) -> list[BaseSearch]:
     flat_cv_embedding = []
+
     for embedding in cv_embedding:
         flat_cv_embedding.append(embedding.embedding)
 
@@ -44,7 +49,10 @@ def faiss_ip_search(
                 )
             )
 
-        distances, indices = index.search(jr.job_requirement_embedding, query_top_k)  # type: ignore
+        query_embedding = jr.job_requirement_embedding.astype("float32")
+        query_embedding = query_embedding.reshape(1, -1)
+        faiss.normalize_L2(query_embedding)
+        distances, indices = index.search(query_embedding, query_top_k)  # type: ignore
         query_retrieval = BaseSearchQuery(
             query=jr.job_requirement, distances=distances[0], indices=indices[0]
         )
@@ -57,30 +65,96 @@ def faiss_ip_search(
             )
         )
 
+    logger.debug(
+        "Vector searched",
+        extra={"stage": InferenceStage.RETRIEVAL, "result": all_base_search},
+    )
     return all_base_search
 
 
 def retrieve_base_chunk(
     search_result: list[BaseSearch],
     idx_to_chunk: dict[int, str],
+    threshold: float,
+    filter_below_threshold: bool,
 ) -> list[BaseRetrieval]:
     all_retrieved_chunks = []
 
     for result in search_result:
-        query_retrieved_chunks = [idx_to_chunk[x] for x in result.query_search.indices]
+        query_retrieved_chunks = []
+        query_retrieved_distances = []
+
+        for idx, indice in enumerate(result.query_search.indices):
+            distance = result.query_search.distances[idx]
+            if distance < threshold:
+                if filter_below_threshold:
+                    logger.warning(
+                        "Skipping low semantic retrieved chunk",
+                        extra={
+                            "stage": InferenceStage.RETRIEVAL,
+                            "query": result.query_search.query,
+                            "chunk": idx_to_chunk[indice],
+                            "score": distance,
+                        },
+                    )
+                    continue
+
+                logger.warning(
+                    "Allowing low semantic retrieved chunk",
+                    extra={
+                        "stage": InferenceStage.RETRIEVAL,
+                        "query": result.query_search.query,
+                        "chunk": idx_to_chunk[indice],
+                        "score": distance,
+                    },
+                )
+
+            query_retrieved_chunks.append(idx_to_chunk[indice])
+            query_retrieved_distances.append(result.query_search.distances[idx])
+
         retrieved_query = BaseRetrievalQuery(
             query=result.query_search.query,
-            distances=result.query_search.distances,
+            distances=query_retrieved_distances,
             chunks=query_retrieved_chunks,
         )
 
         retrieved_components = []
         for component in result.components_search:
-            components_retrieved_chunks = [idx_to_chunk[x] for x in component.indices]
+            components_retrieved_chunks = []
+            components_retrieved_distances = []
+            for idx, indice in enumerate(component.indices):
+                distance = component.distances[idx]
+
+                if distance < threshold:
+                    if filter_below_threshold:
+                        logger.warning(
+                            "Skipping low semantic retrieved chunk",
+                            extra={
+                                "stage": InferenceStage.RETRIEVAL,
+                                "component": component.component,
+                                "chunk": idx_to_chunk[indice],
+                                "score": distance,
+                            },
+                        )
+                        continue
+
+                    logger.warning(
+                        "Allowing low semantic retrieved chunk",
+                        extra={
+                            "stage": InferenceStage.RETRIEVAL,
+                            "component": component.component,
+                            "chunk": idx_to_chunk[indice],
+                            "score": distance,
+                        },
+                    )
+
+                components_retrieved_chunks.append(idx_to_chunk[indice])
+                components_retrieved_distances.append(distance)
+
             retrieved_components.append(
                 BaseRetrievalComponent(
                     component=component.component,
-                    distances=component.distances,
+                    distances=components_retrieved_distances,
                     chunks=components_retrieved_chunks,
                 )
             )
@@ -92,5 +166,10 @@ def retrieve_base_chunk(
                 components_retrieval=retrieved_components,
             )
         )
+
+    logger.debug(
+        "Chunk retrieved",
+        extra={"stage": InferenceStage.RETRIEVAL, "result": all_retrieved_chunks},
+    )
 
     return all_retrieved_chunks

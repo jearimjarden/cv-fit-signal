@@ -1,0 +1,11 @@
+{"levelname": "INFO", "name": "bootstrap", "message": "Starting Preprocess Pipeline", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "logging_level": "info"}
+{"levelname": "INFO", "name": "sentence_transformers.base.model", "message": "Loading SentenceTransformer model from sentence-transformers/all-MiniLM-L6-v2.", "timestamp": "12/05/2026_18:27", "environment": "v.1.2"}
+{"levelname": "INFO", "name": "__main__", "message": "Preprocess Pipeline created", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "stage": "preprocess_service"}
+{"levelname": "INFO", "name": "src.pipelines.preprocess_pipeline", "message": "CV input accepted", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "stage": "pre_input", "cv_text_n": 2328}
+{"levelname": "INFO", "name": "src.pipelines.preprocess_pipeline", "message": "Parsed CV", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "stage": "pre_parse", "cv_parsed_n": 20}
+{"levelname": "INFO", "name": "src.pipelines.preprocess_pipeline", "message": "Chunked parsed CV", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "stage": "pre_chunk", "cv_chunks(n)": 27}
+{"levelname": "INFO", "name": "src.pipelines.preprocess_pipeline", "message": "Embedded CV chunks", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "stage": "pre_embed_cv"}
+{"levelname": "WARNING", "name": "src.IO.save_cv", "message": "Rewriting existed CV for 'ardi_pratama'", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "stage": "pre_save_cv"}
+{"levelname": "INFO", "name": "src.pipelines.preprocess_pipeline", "message": "CV artifact created for 'ardi_pratama'", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "stage": "pre_save_cv"}
+{"levelname": "INFO", "name": "src.pipelines.preprocess_pipeline", "message": "CV Created", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "latencies": {"pre_parse": 10956.17, "pre_embed_cv": 568.66, "preprocess_service": 11528.06}}
+{"levelname": "INFO", "name": "src.pipelines.preprocess_pipeline", "message": "Token Tracked", "timestamp": "12/05/2026_18:27", "environment": "v.1.2", "summary": "TokenSummary(total_prompt_tokens=891, total_completion_tokens=545, total_cost_idr=7.92318, tokens_history={<PreprocessStage.PARSE: 'pre_parse'>: {'prompt_token': 891, 'completion_tokens': 545}})"}
